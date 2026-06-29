@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Evolutionary Game of Life</title>
+    <style>
+        :root {
+            --md-sys-color-background: #121214;
+            --md-sys-color-surface: #1d1b20;
+            --md-sys-color-primary: #38e54d; 
+            --md-sys-color-on-surface: #e6e1e5;
+            --md-sys-color-secondary-container: #4a4458;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--md-sys-color-background);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background-color: var(--md-sys-color-surface);
+            color: var(--md-sys-color-primary); 
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.4), 0px 1px 3px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 100;
+            transition: transform 0.2s ease, background-color 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+            background-color: var(--md-sys-color-secondary-container);
+        }
+
+        .context-menu {
+            position: fixed;
+            bottom: 92px;
+            right: 24px;
+            background-color: var(--md-sys-color-surface);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.5);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 99;
+            min-width: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--md-sys-color-on-surface);
+        }
+
+        .context-menu.show { display: flex; }
+
+        .menu-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .btn {
+            background-color: var(--md-sys-color-primary); 
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            flex-grow: 1;
+            text-align: center;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+
+        .btn.paused {
+            background-color: #ff5252;
+            color: #fff;
+        }
+
+        .btn-respawn {
+            background-color: #4fc3f7;
+            color: #000;
+        }
+
+        .btn-mutation {
+            background-color: #b0bec5;
+            color: #000;
+        }
+        
+        /* CSS for the distinct mutation states */
+        .btn-mutation.active-comet {
+            background-color: #ff3300;
+            color: #fff;
+            box-shadow: 0 0 8px rgba(255, 51, 0, 0.6);
+        }
+
+        .btn-mutation.active-orb {
+            background-color: #00e5ff;
+            color: #000;
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+        }
+
+        .btn-mutation.active-void {
+            background-color: #000000;
+            color: #d500f9;
+            box-shadow: 0 0 12px rgba(213, 0, 249, 0.8);
+            border: 1px solid #d500f9;
+        }
+        
+        .btn-density {
+            background-color: #ffd54f; /* Amber color */
+            color: #000;
+        }
+
+        .btn-density.high-density {
+            background-color: #ff8f00; /* Darker amber when 15% is active */
+            color: #fff;
+            box-shadow: 0 0 8px rgba(255, 143, 0, 0.6);
+        }
+
+        label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #938f99;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--md-sys-color-primary); 
+            margin-top: 4px;
+        }
+        
+        .btn-vitality {
+            background-color: #81c784; 
+            color: #000;
+        }
+
+        .btn-vitality.active {
+            background-color: #00e676;
+            color: #000;
+            box-shadow: 0 0 10px rgba(0, 230, 118, 0.6);
+        }
+        
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+    <div class="fab" id="fabBtn">⚙️</div>
+    <div class="context-menu" id="contextMenu">
+        <div class="menu-row">
+            <button class="btn" id="playPauseBtn">Pause</button>
+            <button class="btn btn-respawn" id="respawnBtn">Respawn</button>
+        </div>
+        <div class="menu-row">
+            <button class="btn btn-mutation" id="mutationBtn">Mutation: OFF</button>
+            <button class="btn btn-density" id="densityBtn">Density: 7%</button>
+            <button class="btn btn-vitality" id="vitalityBtn">Vitality: OFF</button>
+        </div>
+        <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 0;">
+        <div>
+            <label for="speedSlider">Speed (Interval)</label>
+            <input type="range" id="speedSlider" min="50" max="1000" step="50" value="200" dir="rtl">
+        </div>
+        <div id="vitalitySliderContainer" style="display: none; margin-top: 8px;">
+            <label for="vitalitySlider" id="vitalityLabel">Vitality Strength: 100%</label>
+            <input type="range" id="vitalitySlider" min="0.1" max="1.0" step="0.1" value="1.0">
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const fabBtn = document.getElementById('fabBtn');
+        const contextMenu = document.getElementById('contextMenu');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const respawnBtn = document.getElementById('respawnBtn');
+        const mutationBtn = document.getElementById('mutationBtn');
+        const speedSlider = document.getElementById('speedSlider');
+        const densityBtn = document.getElementById('densityBtn'); // Your new button
+
+        const GRID_SIZE = 200;
+        const CELL_SPACING = 20; 
+        
+        let respawnDensity = 0.07; // Track the density
+
+        // Data Grids
+        // 0=Dead, 1=Normal, 2=Comet Fire, 3=Comet Ember, 4=Orb Fire, 5=Orb Ember
+        // 10-40 = Singularity Countdown Timer
+        let grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+        let sizeGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+        let fadeGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+        
+        let isRunning = true;
+        let mutationMode = 0; // 0: OFF, 1: COMET, 2: ORB, 3: VOID
+        let vitalityMode = false;
+        let vitalityMultiplier = 1.0; // 1.0 equals max strength (15% / 1.5%)
+        let updateInterval = 200;
+        let lastUpdateTime = 0;
+
+        let zoom = 0.4;
+        let panX = 0;
+        let panY = 0;
+
+        let isDragging = false;
+        let hasMoved = false;
+        let startX, startY;
+        let activePointers = [];
+        let initialPinchDist = 0;
+        let initialZoom = 1;
+
+        initSeeds();
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (panX === 0 && panY === 0) {
+                const boardWidth = GRID_SIZE * CELL_SPACING;
+                const boardHeight = GRID_SIZE * CELL_SPACING;
+                panX = (canvas.width / 2) - ((boardWidth / 2) * zoom);
+                panY = (canvas.height / 2) - ((boardHeight / 2) * zoom);
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function initSeeds() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    // Update the line below to use respawnDensity
+                    grid[r][c] = Math.random() < respawnDensity ? 1 : 0;
+                    fadeGrid[r][c] = 0; 
+                }
+            }
+            calculateCommunities();
+        }
+
+        // --- Community Detection Algorithm (BFS) ---
+        function calculateCommunities() {
+            let visited = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (grid[r][c] === 1 && !visited[r][c]) { 
+                        let queue = [[r, c]];
+                        let community = [];
+                        visited[r][c] = true;
+
+                        let head = 0;
+                        while(head < queue.length) {
+                            let [cr, cc] = queue[head++];
+                            community.push([cr, cc]);
+
+                            for (let i = -1; i <= 1; i++) {
+                                for (let j = -1; j <= 1; j++) {
+                                    if (i === 0 && j === 0) continue;
+                                    let ni = (cr + i + GRID_SIZE) % GRID_SIZE;
+                                    let nj = (cc + j + GRID_SIZE) % GRID_SIZE;
+                                    
+                                    if (grid[ni][nj] === 1 && !visited[ni][nj]) {
+                                        visited[ni][nj] = true;
+                                        queue.push([ni, nj]);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        let size = community.length;
+                        for (let [cr, cc] of community) {
+                            sizeGrid[cr][cc] = size;
+                        }
+                    } else if (grid[r][c] !== 1) {
+                        sizeGrid[r][c] = 0;
+                    }
+                }
+            }
+        }
+
+        function updateGrid() {
+            let nextGrid = grid.map(arr => [...arr]);
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    
+                    let normalNeighbors = 0;
+                    let fireNeighbors = 0;
+                    let emberNeighbors = 0;
+                    let orbFireNeighbors = 0;
+                    let orbEmberNeighbors = 0;
+                    let maxBH = 0; 
+                    
+                    for (let i = -1; i <= 1; i++) {
+                        for (let j = -1; j <= 1; j++) {
+                            if (i === 0 && j === 0) continue;
+                            let ni = (r + i + GRID_SIZE) % GRID_SIZE;
+                            let nj = (c + j + GRID_SIZE) % GRID_SIZE;
+                            
+                            let state = grid[ni][nj];
+                            
+                            // Black Hole logic overrides standard counting
+                            if (state >= 10) {
+                                if (state > maxBH) maxBH = state;
+                            } 
+                            else if (state === 1) normalNeighbors++;
+                            else if (state === 2) fireNeighbors++;
+                            else if (state === 3) emberNeighbors++;
+                            else if (state === 4) orbFireNeighbors++;
+                            else if (state === 5) orbEmberNeighbors++;
+                        }
+                    }
+
+                    // --- PHYSICS OVERRIDE: THE SINGULARITY MASTER TIMER ---
+                    if (grid[r][c] >= 10) {
+                        let nextState = grid[r][c] - 1;
+                        
+                        // If multiple black holes overlap, merge seamlessly into the hottest one
+                        if (maxBH - 1 > nextState) {
+                            nextState = maxBH - 1;
+                        }
+
+                        if (nextState < 10) {
+                            nextGrid[r][c] = 0; 
+                            fadeGrid[r][c] = 0; 
+                        } else {
+                            nextGrid[r][c] = nextState;
+                            fadeGrid[r][c] = 0; 
+                        }
+                    } 
+                    else if (maxBH >= 10) {
+                        // Cell was touched by the expanding event horizon! It is instantly consumed.
+                        let nextState = maxBH - 1;
+                        if (nextState < 10) {
+                            nextGrid[r][c] = 0;
+                            fadeGrid[r][c] = 0;
+                        } else {
+                            nextGrid[r][c] = nextState;
+                            fadeGrid[r][c] = 0;
+                        }
+                    } 
+                    // --- STANDARD PHYSICS ---
+                    else {
+                        // Standard Cell Logic (1)
+                        if (grid[r][c] === 1) {
+                            if (fireNeighbors > 0 || emberNeighbors > 0) {
+                                nextGrid[r][c] = 2; // Combust into Comet Fire
+                            } else if (orbFireNeighbors > 0 || orbEmberNeighbors > 0) {
+                                nextGrid[r][c] = 4; // Combust into Orb Fire
+                            } else if (normalNeighbors < 2 || normalNeighbors > 3) {
+                                // VITALITY MODE: 15% chance to survive mild overpopulation (4 neighbors)
+if (vitalityMode && normalNeighbors === 4 && Math.random() < (0.15 * vitalityMultiplier)) {
+                                    nextGrid[r][c] = 1;
+                                } else {
+                                    nextGrid[r][c] = 0; 
+                                    fadeGrid[r][c] = 1.0; 
+                                }
+                            } else {
+                                nextGrid[r][c] = 1;
+                            }
+                        } 
+                        // Comet Logic (2, 3) - The Hunters
+                        else if (grid[r][c] === 2) {
+                            nextGrid[r][c] = 3; 
+                        } 
+                        else if (grid[r][c] === 3) {
+                            nextGrid[r][c] = 0; 
+                            fadeGrid[r][c] = 1.0; 
+                        }
+                        // Orb Logic (4, 5) - The Wave
+                        else if (grid[r][c] === 4) {
+                            nextGrid[r][c] = 5; 
+                        } 
+                        else if (grid[r][c] === 5) {
+                            nextGrid[r][c] = 0; 
+                            fadeGrid[r][c] = 1.0; 
+                        }
+                        // Dead Cell Logic (0)
+                        else {
+                            let isPureEnvironment = (fireNeighbors === 0 && emberNeighbors === 0 && orbFireNeighbors === 0 && orbEmberNeighbors === 0);
+                            
+                            // 1. Standard Birth & Vitality Birth
+                            if (isPureEnvironment) {
+                                if (normalNeighbors === 3) {
+                                    nextGrid[r][c] = 1; 
+                                } 
+                                // VITALITY MODE: 1.5% chance for a rogue birth with only 2 neighbors
+else if (vitalityMode && normalNeighbors === 2 && Math.random() < (0.015 * vitalityMultiplier)) {
+                                    nextGrid[r][c] = 1;
+                                }
+                            }
+                            // 2. Comet Propagation: Strict (Exactly 2, No embers)
+                            else if (fireNeighbors === 2 && emberNeighbors === 0) {
+                                nextGrid[r][c] = 2;
+                            }
+                            // 3. Orb Propagation: Aggressive spread (Any fire > 0, No embers)
+                            else if (orbFireNeighbors > 0 && orbEmberNeighbors === 0) {
+                                nextGrid[r][c] = 4;
+                            }
+                        }
+                    }
+                }
+            }
+            grid = nextGrid;
+            calculateCommunities(); 
+        }
+
+
+        function draw(currentTime) {
+            if (isRunning && currentTime - lastUpdateTime >= updateInterval) {
+                updateGrid();
+                lastUpdateTime = currentTime;
+            }
+
+            ctx.fillStyle = '#121214';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoom, zoom);
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const x = c * CELL_SPACING + CELL_SPACING / 2;
+                    const y = r * CELL_SPACING + CELL_SPACING / 2;
+
+                    // 1. Draw Base Matrix Dots
+                    // The Void erases the background matrix to create a true hole
+                    if (grid[r][c] < 10) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // 2. Draw Ghost Cells (Smooth Fading)
+                    if (grid[r][c] === 0 && fadeGrid[r][c] > 0) {
+                        fadeGrid[r][c] -= 0.050; 
+                        if (fadeGrid[r][c] < 0) fadeGrid[r][c] = 0;
+
+                        ctx.save();
+                        ctx.fillStyle = `rgba(160, 164, 168, ${fadeGrid[r][c]})`;
+                        ctx.shadowBlur = 6;
+                        ctx.shadowColor = `rgba(160, 164, 168, ${fadeGrid[r][c] * 0.5})`;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 5 + (fadeGrid[r][c] * 1.5), 0, Math.PI * 2); 
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // 3. Draw Alive Cells & Singularities
+                    if (grid[r][c] > 0) {
+                        
+                        // Render The Void (Singularity)
+                        if (grid[r][c] >= 10) {
+                            // Check if this specific cell is on the outer edge (Event Horizon)
+                            let nUp = grid[(r - 1 + GRID_SIZE) % GRID_SIZE][c];
+                            let nDown = grid[(r + 1) % GRID_SIZE][c];
+                            let nLeft = grid[r][(c - 1 + GRID_SIZE) % GRID_SIZE];
+                            let nRight = grid[r][(c + 1) % GRID_SIZE];
+                            
+                            let isEdge = (nUp < 10 || nDown < 10 || nLeft < 10 || nRight < 10);
+
+                            ctx.save();
+                            ctx.shadowBlur = isEdge ? 20 : 0;
+                            ctx.shadowColor = isEdge ? '#d500f9' : 'transparent';
+                            ctx.fillStyle = '#000000'; // Pure pitch black
+                            ctx.beginPath();
+                            // Oversized radius (12 vs 7) to merge cleanly into a solid geometric mass
+                            ctx.arc(x, y, 12, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        } 
+                        // Render Standard & Mutation Cells
+                        else {
+                            let fillStyle, shadowColor;
+
+                            // Normal Cells
+                            if (grid[r][c] === 1) {
+                                let size = sizeGrid[r][c];
+                                let hue = Math.max(0, 240 - (size * 3));
+                                fillStyle = `hsl(${hue}, 100%, 65%)`;
+                                shadowColor = fillStyle;
+                            } 
+                            // Comet Cells
+                            else if (grid[r][c] === 2) {
+                                fillStyle = '#ffcc00';
+                                shadowColor = '#ff9900';
+                            } else if (grid[r][c] === 3) {
+                                fillStyle = '#ff3300';
+                                shadowColor = '#cc0000';
+                            }
+                            // Orb Cells 
+                            else if (grid[r][c] === 4) {
+                                fillStyle = '#00e5ff';
+                                shadowColor = '#00b0ff';
+                            } else if (grid[r][c] === 5) {
+                                fillStyle = '#651fff';
+                                shadowColor = '#6200ea';
+                            }
+
+                            ctx.save();
+                            ctx.shadowBlur = (grid[r][c] >= 2) ? 22 : 16; 
+                            ctx.shadowColor = shadowColor;
+                            ctx.fillStyle = fillStyle;
+                            ctx.beginPath();
+                            ctx.arc(x, y, 7, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
+                }
+            }
+
+            ctx.restore();
+            requestAnimationFrame(draw);
+        }
+
+        // --- Touch & Mouse Logic ---
+        function getDistance(p1, p2) {
+            return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            activePointers.push(e);
+            if (activePointers.length === 1) {
+                isDragging = true;
+                hasMoved = false;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+            } else if (activePointers.length === 2) {
+                isDragging = false;
+                initialPinchDist = getDistance(activePointers[0], activePointers[1]);
+                initialZoom = zoom;
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            const index = activePointers.findIndex(p => p.pointerId === e.pointerId);
+            if (index !== -1) activePointers[index] = e;
+
+            if (isDragging && activePointers.length === 1) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                if (Math.abs(dx - panX) > 4 || Math.abs(dy - panY) > 4) hasMoved = true;
+                panX = dx;
+                panY = dy;
+            } else if (activePointers.length === 2) {
+                hasMoved = true;
+                const currentDist = getDistance(activePointers[0], activePointers[1]);
+                const factor = currentDist / initialPinchDist;
+                
+                const midX = (activePointers[0].clientX + activePointers[1].clientX) / 2;
+                const midY = (activePointers[0].clientY + activePointers[1].clientY) / 2;
+                
+                const gridMidX = (midX - panX) / zoom;
+                const gridMidY = (midY - panY) / zoom;
+
+                zoom = Math.max(0.05, Math.min(4.0, initialZoom * factor));
+                panX = midX - gridMidX * zoom;
+                panY = midY - gridMidY * zoom;
+            }
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            if (isDragging && !hasMoved && activePointers.length === 1) {
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                const gridX = Math.floor(((clickX - panX) / zoom) / CELL_SPACING);
+                const gridY = Math.floor(((clickY - panY) / zoom) / CELL_SPACING);
+
+                if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+                    if (grid[gridY][gridX] > 0 && grid[gridY][gridX] < 10) {
+                        grid[gridY][gridX] = 0; // Kill standard cell
+                    } else {
+                        // Spawn Normal, Comet, Orb, or Singularity based on mode
+                        if (mutationMode === 0) grid[gridY][gridX] = 1;
+                        else if (mutationMode === 1) grid[gridY][gridX] = 2;
+                        else if (mutationMode === 2) grid[gridY][gridX] = 4;
+                        else if (mutationMode === 3) grid[gridY][gridX] = 40; // Initiate the Master Timer
+                    }
+                    calculateCommunities(); 
+                }
+            }
+
+            activePointers = activePointers.filter(p => p.pointerId !== e.pointerId);
+            if (activePointers.length < 2) initialPinchDist = 0;
+            if (activePointers.length === 1) {
+                isDragging = true;
+                startX = activePointers[0].clientX - panX;
+                startY = activePointers[0].clientY - panY;
+            } else {
+                isDragging = false;
+            }
+        });
+
+        canvas.addEventListener('pointercancel', (e) => {
+            activePointers = [];
+            isDragging = false;
+        });
+
+        // --- Menu Logic ---
+        fabBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            contextMenu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target) && e.target !== fabBtn) {
+                contextMenu.classList.remove('show');
+            }
+        });
+
+        playPauseBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            if (isRunning) {
+                playPauseBtn.textContent = "Pause";
+                playPauseBtn.classList.remove('paused');
+            } else {
+                playPauseBtn.textContent = "Play";
+                playPauseBtn.classList.add('paused');
+            }
+        });
+
+        respawnBtn.addEventListener('click', () => {
+            initSeeds();
+            contextMenu.classList.remove('show');
+        });
+
+        mutationBtn.addEventListener('click', () => {
+            mutationMode = (mutationMode + 1) % 4; // Cycle through 0, 1, 2, 3
+            
+            if (mutationMode === 0) {
+                mutationBtn.textContent = "Mutation: OFF";
+                mutationBtn.className = "btn btn-mutation"; 
+            } else if (mutationMode === 1) {
+                mutationBtn.textContent = "Mutation: COMET";
+                mutationBtn.className = "btn btn-mutation active-comet";
+            } else if (mutationMode === 2) {
+                mutationBtn.textContent = "Mutation: VOID";
+                mutationBtn.className = "btn btn-mutation active-void";
+            } else if (mutationMode === 3) {
+                mutationBtn.textContent = "Mutation: ORB";
+                mutationBtn.className = "btn btn-mutation active-orb";
+            }
+        });
+
+        // Add this right below your mutationBtn.addEventListener block
+        densityBtn.addEventListener('click', () => {
+            if (respawnDensity === 0.07) {
+                respawnDensity = 0.15;
+                densityBtn.textContent = "Density: 15%";
+                densityBtn.classList.add('high-density');
+            } else {
+                respawnDensity = 0.07;
+                densityBtn.textContent = "Density: 7%";
+                densityBtn.classList.remove('high-density');
+            }
+        });
+
+        const vitalityBtn = document.getElementById('vitalityBtn');
+        const vitalitySliderContainer = document.getElementById('vitalitySliderContainer');
+        const vitalitySlider = document.getElementById('vitalitySlider');
+        const vitalityLabel = document.getElementById('vitalityLabel');
+
+        vitalityBtn.addEventListener('click', () => {
+            vitalityMode = !vitalityMode;
+            if (vitalityMode) {
+                vitalityBtn.textContent = "Vitality: ON";
+                vitalityBtn.classList.add('active');
+                vitalitySliderContainer.style.display = 'block'; // Reveal the slider
+            } else {
+                vitalityBtn.textContent = "Vitality: OFF";
+                vitalityBtn.classList.remove('active');
+                vitalitySliderContainer.style.display = 'none'; // Hide the slider
+            }
+        });
+
+        vitalitySlider.addEventListener('input', (e) => {
+            vitalityMultiplier = parseFloat(e.target.value);
+            vitalityLabel.textContent = `Vitality Strength: ${Math.round(vitalityMultiplier * 100)}%`;
+        });
+        
+        speedSlider.addEventListener('input', (e) => {
+            updateInterval = parseInt(e.target.value);
+        });
+
+        requestAnimationFrame(draw);
+    </script>
+</body>
+</html>
